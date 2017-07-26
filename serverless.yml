@@ -1,0 +1,265 @@
+frameworkVersion: ">=1.16.0 <2.0.0"
+
+service: sensors
+
+provider:
+  name: aws
+  runtime: nodejs6.10
+  profile: weatherstation
+  region: eu-west-1
+  environment:
+    SERVERLESS_STAGE: ${opt:stage, self:provider.stage}
+    SERVERLESS_PROJECT: ${self:service}
+    SERVERLESS_REGION: ${opt:region, self:provider.region}
+    SENSORS_TABLE_NAME: ${self:provider.environment.SERVERLESS_PROJECT}-${self:provider.environment.SERVERLESS_STAGE}-sensors
+    RAW_DATA_TABLE_NAME: ${self:provider.environment.SERVERLESS_PROJECT}-${self:provider.environment.SERVERLESS_STAGE}-raw-data
+    DATA_BUCKET_NAME:
+      Ref: DataBucket
+    AUTHORIZATION_TOKEN: ${self:custom.kmsSecrets.secrets.AUTHORIZATION_TOKEN}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+      - dynamodb:*
+      Resource: arn:aws:dynamodb:${self:provider.environment.SERVERLESS_REGION}:*:*
+    - Effect: Allow
+      Action:
+      - SNS:*
+      Resource: arn:aws:sns:${self:provider.environment.SERVERLESS_REGION}:*:*
+    - Effect: Allow
+      Action:
+      - s3:*
+      Resource: "*"
+    - Effect: Allow
+      Action:
+      - KMS:Decrypt
+      Resource: ${self:custom.kmsSecrets.keyArn}
+package:
+  exclude:
+    - test/**
+    - .git/**
+
+functions:
+  last-hour:
+    handler: process/last-hour/index.handler
+    events:
+      - schedule: rate(15 minutes)
+  authorizer:
+    handler: authorizer/index.handler
+  current:
+    handler: process/current/index.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt:
+              - RawDataTable
+              - StreamArn
+  sensor:
+    handler: sensor/index.handler
+    events:
+      - http:
+          path: sensor
+          method: post
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 0
+            identitySource: method.request.header.Authorization
+      - http:
+          path: sensor/{id}
+          method: get
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 0
+            identitySource: method.request.header.Authorization
+
+plugins:
+  - serverless-mocha-plugin
+  - serverless-webpack
+  - serverless-offline
+  - serverless-kms-secrets
+
+custom:
+  serverless-mocha-plugin:
+    functionTemplate: templates/function.ejs
+  webpackIncludeModules: true
+  kmsSecrets: ${file(kms-secrets.${opt:stage, self:provider.stage}.${opt:region, self:provider.region}.yml)}
+
+resources:
+  Resources:
+    ApiDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Origins:
+            - Id: DataBucket
+              DomainName:
+                Fn::GetAtt:
+                  - DataBucket
+                  - DomainName
+              S3OriginConfig: {}
+            - Id: SensorApi
+              DomainName:
+                Fn::Join:
+                  - ""
+                  - - Ref: ApiGatewayRestApi
+                    - ".execute-api."
+                    - Ref: AWS::Region
+                    - ".amazonaws.com"
+              OriginPath: "/${self:provider.environment.SERVERLESS_STAGE}"
+              CustomOriginConfig:
+                HTTPPort: '443'
+                OriginProtocolPolicy: https-only
+                OriginSSLProtocols:
+                  - TLSv1
+                  - TLSv1.1
+                  - TLSv1.2
+          Enabled: 'true'
+          Comment: Sensors API [${self:provider.environment.SERVERLESS_STAGE}]
+          Aliases: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.aliases}
+          DefaultCacheBehavior:
+            TargetOriginId: SensorApi
+            AllowedMethods:
+              - HEAD
+              - DELETE
+              - POST
+              - GET
+              - OPTIONS
+              - PUT
+              - PATCH
+            ForwardedValues:
+              Headers:
+                - Authorization
+              QueryString: 'false'
+              Cookies:
+                Forward: none
+            ViewerProtocolPolicy: redirect-to-https
+            MinTTL: "0"
+            MaxTTL: "0"
+            DefaultTTL: "0"
+          CacheBehaviors:
+            - TargetOriginId: DataBucket
+              AllowedMethods:
+                - HEAD
+                - GET
+                - OPTIONS
+              CachedMethods:
+                - HEAD
+                - GET
+              ForwardedValues:
+                QueryString: 'false'
+                Cookies:
+                  Forward: none
+              ViewerProtocolPolicy: redirect-to-https
+              MinTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              MaxTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              DefaultTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              PathPattern: data/*
+            - TargetOriginId: DataBucket
+              AllowedMethods:
+                - HEAD
+                - GET
+                - OPTIONS
+              CachedMethods:
+                - HEAD
+                - GET
+              ForwardedValues:
+                QueryString: 'false'
+                Cookies:
+                  Forward: none
+              ViewerProtocolPolicy: redirect-to-https
+              MinTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              MaxTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              DefaultTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              PathPattern: images/*
+          PriceClass: PriceClass_100
+          ViewerCertificate: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.viewerCertificate}
+          Logging:
+            IncludeCookies: 'false'
+            Bucket:
+              Fn::GetAtt:
+                - LogsBucket
+                - DomainName
+            Prefix: front
+
+    LogsBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      Properties:
+        LifecycleConfiguration:
+          Rules:
+          - Id: DeleteRule
+            Status: Enabled
+            ExpirationInDays: '7'
+
+    DataBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      Properties:
+        AccessControl: PublicRead
+        CorsConfiguration:
+          CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+            AllowedOrigins:
+              - '*'
+            ExposedHeaders:
+              - Date
+            Id: DataBucketCorsRule1
+            MaxAge: '3600'
+
+    DataBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: DataBucket
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource:
+              Fn::Join:
+              - ''
+              - - 'arn:aws:s3:::'
+                - Ref: DataBucket
+                - "/*"
+
+    RawDataTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: mac
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: mac
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.RAW_DATA_TABLE_NAME}
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
+
+    SensorsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: mac
+            AttributeType: S
+        KeySchema:
+          - AttributeName: mac
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.SENSORS_TABLE_NAME}
