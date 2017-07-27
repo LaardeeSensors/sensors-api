@@ -13,8 +13,8 @@ if (process.env.SERVERLESS_MOCHA_PLUGIN_LIVE) {
   wrapped = lambdaWrapper.wrap(mod);
 } else {
   const mod = require(process.env.SERVERLESS_TEST_ROOT + '/process/last-hour/index.js');
-  wrapped = lambdaWrapper.wrap(mod, { 
-    handler: 'handler' 
+  wrapped = lambdaWrapper.wrap(mod, {
+    handler: 'handler',
   });
 }
 

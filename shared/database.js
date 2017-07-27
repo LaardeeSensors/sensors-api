@@ -43,13 +43,17 @@ const getSensorConfiguration = ({ deviceId }) => {
     Object.assign(
       { TableName: process.env.SENSORS_TABLE_NAME },
       {
-        ProjectionExpression: '#mac, #deviceId, #configuration, #name',
+        ProjectionExpression:
+          '#mac, #deviceId, #configuration, #name, #location, #coordinates, #altitude',
         FilterExpression: '#deviceId = :deviceId',
         ExpressionAttributeNames: {
           '#mac': 'mac',
           '#name': 'name',
           '#deviceId': 'deviceId',
           '#configuration': 'configuration',
+          '#location': 'location',
+          '#coordinates': 'coordinates',
+          '#altitude': 'altitude',
         },
         ExpressionAttributeValues: {
           ':deviceId': deviceId,

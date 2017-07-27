@@ -9,16 +9,16 @@ const expect = mochaPlugin.chai.expect;
 let wrapped;
 
 if (process.env.SERVERLESS_MOCHA_PLUGIN_LIVE) {
-  const mod = mochaPlugin.initLiveModule('sensor');
+  const mod = mochaPlugin.initLiveModule('devices');
   wrapped = lambdaWrapper.wrap(mod);
 } else {
-  const mod = require(process.env.SERVERLESS_TEST_ROOT + '/sensor/index.js');
-  wrapped = lambdaWrapper.wrap(mod, { 
+  const mod = require(process.env.SERVERLESS_TEST_ROOT + '/devices/index.js');
+  wrapped = lambdaWrapper.wrap(mod, {
     handler: 'handler',
   });
 }
 
-describe('sensor', () => {
+describe('devices', () => {
   before((done) => {
 //  lambdaWrapper.init(liveFunction); // Run the deployed lambda
 

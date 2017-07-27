@@ -54,18 +54,18 @@ functions:
             Fn::GetAtt:
               - RawDataTable
               - StreamArn
-  sensor:
-    handler: sensor/index.handler
+  devices:
+    handler: devices/index.handler
     events:
       - http:
-          path: sensor
+          path: devices
           method: post
           authorizer:
             name: authorizer
             resultTtlInSeconds: 0
             identitySource: method.request.header.Authorization
       - http:
-          path: sensor/{id}
+          path: devices/{id}
           method: get
           authorizer:
             name: authorizer

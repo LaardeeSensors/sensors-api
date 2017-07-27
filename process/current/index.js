@@ -4,11 +4,11 @@ const AWS = require('aws-sdk');
 const log = require('../../shared/log');
 const { AttributeValue } = require('dynamodb-data-types');
 const _ = require('lodash');
-const {
-  getSensorConfiguration,
-} = require('../../shared/database');
 
-const { mapSensorData } = require('../../shared/sensors');
+const {
+  mapSensorData,
+  enhanceSensorData,
+} = require('../../shared/sensors');
 
 const s3 = new AWS.S3({
   region: AWS.config.region || process.env.SERVERLESS_REGION || 'us-east-1',
@@ -27,9 +27,8 @@ module.exports.handler = (event, context, callback) => {
       .then(error => callback(error));
   }
 
-  return getSensorConfiguration({ deviceId: image.deviceId })
-    .then(({ name }) => {
-      const enhancedPayload = Object.assign({}, payload, { name });
+  return enhanceSensorData({ deviceId: image.deviceId, data: payload })
+    .then((enhancedPayload) => {
       log('payload', enhancedPayload);
       return s3.putObject({
         Bucket: process.env.DATA_BUCKET_NAME,

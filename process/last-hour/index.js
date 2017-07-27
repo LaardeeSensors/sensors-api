@@ -8,11 +8,10 @@ const log = require('../../shared/log');
 
 const { devicesByDeviceId } = require('../../shared/sensors');
 
-const { mapSensorData } = require('../../shared/sensors');
-
 const {
-  getSensorConfiguration,
-} = require('../../shared/database');
+  mapSensorData,
+  enhanceSensorData,
+} = require('../../shared/sensors');
 
 const s3 = new AWS.S3({
   region: AWS.config.region || process.env.SERVERLESS_REGION || 'us-east-1',
@@ -73,9 +72,8 @@ const calculateAverage = (items) => {
         deviceId,
       };
 
-      return getSensorConfiguration({ deviceId })
-        .then(({ name }) => {
-          const enhancedPayload = Object.assign({}, payload, { name });
+      return enhanceSensorData({ deviceId, data: payload })
+        .then((enhancedPayload) => {
           log('payload', enhancedPayload);
           return s3.putObject({
             Bucket: process.env.DATA_BUCKET_NAME,
