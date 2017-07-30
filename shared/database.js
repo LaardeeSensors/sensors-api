@@ -91,7 +91,9 @@ const getEnhancedSensorData = ({ from, to, deviceId }) =>
         .then(sensorData => sensorData.reduce((result, data) => {
           const configurationItem = _.find(configurationItems, { deviceId: data.deviceId });
           if (configurationItem) {
-            result.push(enhanceSensorDataWithConfiguration({ configuration: configurationItem, sensorData: data }));
+            const d = enhanceSensorDataWithConfiguration({ configuration: configurationItem, sensorData: data });
+            log(d);
+            result.push(d);
           }
           return result;
         }, [])));

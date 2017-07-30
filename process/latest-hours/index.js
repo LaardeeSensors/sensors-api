@@ -1,17 +1,19 @@
 'use strict';
 
+const AWS = require('aws-sdk');
 const log = require('../../shared/log');
 const moment = require('moment');
 const _ = require('lodash');
 
+const s3 = new AWS.S3({
+  region: AWS.config.region || process.env.SERVERLESS_REGION || 'us-east-1',
+});
+
 const {
-  getSensorData,
-  getSensorConfiguration,
   getEnhancedSensorData,
 } = require('../../shared/database');
+
 const {
-  mapSensorData,
-  enhanceSensorData,
   devicesByDeviceId,
 } = require('../../shared/sensors');
 
@@ -23,20 +25,18 @@ module.exports.handler = (event, context, callback) => {
     .format('X'), 10);
 
   return getEnhancedSensorData({ from, to })
+    .then(devicesByDeviceId)
     .then(log)
+    .then((devices) => {
+      log('devices', devices);
+      const promises =
+        Object.keys(devices).map(deviceId => s3.putObject({
+          Bucket: process.env.DATA_BUCKET_NAME,
+          Key: `sensors/${deviceId}/${event.type}`,
+          ContentType: 'application/json',
+          Body: JSON.stringify(devices[deviceId]),
+        }).promise());
+      return Promise.all(promises);
+    })
     .then(() => callback(null, 'ok'));
-
-  // return getSensorData({ from, to })
-  //   .then(items => items.map(mapSensorData))
-  //   .then(devicesByDeviceId)
-  //   .then((devices) =>
-  //     Promise.all(Object.keys(devices).map((deviceId) => {
-  //       return enhanceSensorData({ deviceId, data: devices[deviceId].items })
-  //         .then(items => Object.assign({}, devices[deviceId], { items }));
-  //     })))
-  //   // .then(() => getSensorConfiguration({ deviceId }))
-  //   // .then(items =>
-  //   //   Promise.all(items.map(data => enhanceSensorData({ deviceId: data.deviceId, data }))))
-  //   .then(log)
-  //   .then(() => callback(null, 'ok'));
 };

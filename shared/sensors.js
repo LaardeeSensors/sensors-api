@@ -12,9 +12,9 @@ const devicesByDeviceId = (items) =>
   items.reduce((result, item) => {
     const devices = Object.assign({}, result);
     if (!devices[item.deviceId]) {
-      devices[item.deviceId] = { items: [] };
+      devices[item.deviceId] = [];
     }
-    devices[item.deviceId].items.push(item);
+    devices[item.deviceId].push(item);
     return devices;
   }, {});
 
@@ -42,7 +42,7 @@ with temperature http://keisan.casio.com/exec/system/1224575267
 
 const calculateSeaLevelSensor = ({ sensors, altitude }) => {
   const seaLevelPressureSensors =
-    _.filter(sensors, { type: 'absolutepressure', unit: 'hPa' })
+    _.filter(sensors, { type: 'absolutePressure', unit: 'hPa' })
       .map((sensor) =>
         ({
           type: 'seaLevelPressure',
@@ -58,8 +58,11 @@ const enhanceSensorDataWithConfiguration = ({ configuration, sensorData }) => {
     throw new Error('Invalid deviceId');
   }
   const { name, location, altitude, coordinates } = configuration;
+  Object.assign(sensorData, { sensors: _.map(sensorData.sensors, sensor => sensor) });
   const sensors = calculateSeaLevelSensor({ sensors: sensorData.sensors, altitude });
-  return Object.assign({}, mapSensorData(sensorData), { name, sensors, location, altitude, coordinates });
+  return Object.assign({},
+    mapSensorData(sensorData),
+    { name, sensors, location, altitude, coordinates });
 };
 
 const enhanceSensorData = ({ sensorData }) =>

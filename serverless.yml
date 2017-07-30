@@ -8,11 +8,16 @@ provider:
   profile: weatherstation
   region: eu-west-1
   environment:
+    # Common
     SERVERLESS_STAGE: ${opt:stage, self:provider.stage}
     SERVERLESS_PROJECT: ${self:service}
     SERVERLESS_REGION: ${opt:region, self:provider.region}
-    SENSORS_TABLE_NAME: ${self:provider.environment.SERVERLESS_PROJECT}-${self:provider.environment.SERVERLESS_STAGE}-sensors
+    # SNS
+    LATEST_TOPIC_NAME: ${self:provider.environment.SERVERLESS_PROJECT}-${self:provider.environment.SERVERLESS_STAGE}-latest
+    # DynamoDB
     RAW_DATA_TABLE_NAME: ${self:provider.environment.SERVERLESS_PROJECT}-${self:provider.environment.SERVERLESS_STAGE}-raw-data
+    SENSORS_TABLE_NAME: ${self:provider.environment.SERVERLESS_PROJECT}-${self:provider.environment.SERVERLESS_STAGE}-sensors
+    # Bucket
     DATA_BUCKET_NAME:
       Ref: DataBucket
     AUTHORIZATION_TOKEN: ${self:custom.kmsSecrets.secrets.AUTHORIZATION_TOKEN}
@@ -39,6 +44,11 @@ package:
     - .git/**
 
 functions:
+  latest-locations:
+    handler: process/latest-locations/index.handler
+    events:
+      - sns: arn:aws:sns:${self:provider.environment.SERVERLESS_REGION}:${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.account}:${self:provider.environment.LATEST_TOPIC_NAME}
+
   latest-hours:
     handler: process/latest-hours/index.handler
     events:
@@ -64,8 +74,8 @@ functions:
             type: 24h
   authorizer:
     handler: authorizer/index.handler
-  current:
-    handler: process/current/index.handler
+  latest:
+    handler: process/latest/index.handler
     events:
       - stream:
           type: dynamodb
@@ -105,6 +115,27 @@ custom:
 
 resources:
   Resources:
+    LatestTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        DisplayName: ${self:provider.environment.LATEST_TOPIC_NAME}
+        TopicName: ${self:provider.environment.LATEST_TOPIC_NAME}
+    LatestTopicPolicy:
+      Type: AWS::SNS::TopicPolicy
+      Properties:
+        PolicyDocument:
+          Id: LatestTopicPolicy
+          Version: '2012-10-17'
+          Statement:
+            - Sid: LatestTopicPolicy-001
+              Effect: Allow
+              Principal:
+                AWS: "*"
+              Action: sns:Publish
+              Resource:
+                Ref: LatestTopic
+        Topics:
+          - Ref: LatestTopic
     ApiDistribution:
       Type: AWS::CloudFront::Distribution
       Properties:
@@ -227,6 +258,16 @@ resources:
               - Date
             Id: DataBucketCorsRule1
             MaxAge: '3600'
+        NotificationConfiguration:
+          TopicConfigurations:
+            - Topic:
+                Ref: LatestTopic
+              Event: s3:ObjectCreated:*
+              Filter:
+                S3Key:
+                  Rules:
+                    - Name: prefix
+                      Value: sensors/
 
     DataBucketPolicy:
       Type: AWS::S3::BucketPolicy
@@ -236,16 +277,16 @@ resources:
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
-          - Sid: PublicReadGetObject
-            Effect: Allow
-            Principal: "*"
-            Action: s3:GetObject
-            Resource:
-              Fn::Join:
-              - ''
-              - - 'arn:aws:s3:::'
-                - Ref: DataBucket
-                - "/*"
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource:
+                Fn::Join:
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - Ref: DataBucket
+                    - "/*"
 
     RawDataTable:
       Type: AWS::DynamoDB::Table

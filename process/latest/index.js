@@ -30,9 +30,9 @@ module.exports.handler = (event, context, callback) => {
   return enhanceSensorData({ deviceId: image.deviceId, sensorData: payload })
     .then((enhancedPayload) => {
       log('payload', enhancedPayload);
-      return s3.putObject({
+      s3.putObject({
         Bucket: process.env.DATA_BUCKET_NAME,
-        Key: `data/${image.deviceId}/current`,
+        Key: `sensors/${enhancedPayload.deviceId}/latest`,
         ContentType: 'application/json',
         Body: JSON.stringify(enhancedPayload),
       }).promise();
