@@ -27,7 +27,7 @@ module.exports.handler = (event, context, callback) => {
       .then(error => callback(error));
   }
 
-  return enhanceSensorData({ deviceId: image.deviceId, data: payload })
+  return enhanceSensorData({ deviceId: image.deviceId, sensorData: payload })
     .then((enhancedPayload) => {
       log('payload', enhancedPayload);
       return s3.putObject({

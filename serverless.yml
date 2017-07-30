@@ -39,10 +39,29 @@ package:
     - .git/**
 
 functions:
-  last-hour:
-    handler: process/last-hour/index.handler
+  latest-hours:
+    handler: process/latest-hours/index.handler
     events:
-      - schedule: rate(15 minutes)
+      - schedule:
+          rate: cron(0/15 * * * ? *)
+          enabled: true
+          input:
+            type: 3h
+      - schedule:
+          rate: cron(0/15 * * * ? *)
+          enabled: true
+          input:
+            type: 6h
+      - schedule:
+          rate: cron(0 * * * ? *)
+          enabled: true
+          input:
+            type: 12h
+      - schedule:
+          rate: cron(0 * * * ? *)
+          enabled: true
+          input:
+            type: 24h
   authorizer:
     handler: authorizer/index.handler
   current:

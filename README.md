@@ -24,4 +24,5 @@
 | **Device** |
 | /devices | POST | Insert data from device |
 | /devices/{deviceId} | GET | Get device configuration |
+| /devices/register | POST | Register device mac + something? |
 

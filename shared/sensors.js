@@ -11,10 +11,10 @@ const {
 const devicesByDeviceId = (items) =>
   items.reduce((result, item) => {
     const devices = Object.assign({}, result);
-    if (!devices[item.mac]) {
-      devices[item.mac] = { items: [] };
+    if (!devices[item.deviceId]) {
+      devices[item.deviceId] = { items: [] };
     }
-    devices[item.mac].items.push(item);
+    devices[item.deviceId].items.push(item);
     return devices;
   }, {});
 
@@ -40,23 +40,38 @@ with temperature http://keisan.casio.com/exec/system/1224575267
 
  */
 
-const enhanceSensorData = ({ deviceId, data }) =>
-  getSensorConfiguration({ deviceId })
+const calculateSeaLevelSensor = ({ sensors, altitude }) => {
+  const seaLevelPressureSensors =
+    _.filter(sensors, { type: 'absolutepressure', unit: 'hPa' })
+      .map((sensor) =>
+        ({
+          type: 'seaLevelPressure',
+          value: pressureAtSeaLevel({ pressure: sensor.value, altitude }),
+          unit: sensor.unit,
+        }));
+
+  return [].concat(sensors, seaLevelPressureSensors);
+};
+
+const enhanceSensorDataWithConfiguration = ({ configuration, sensorData }) => {
+  if (configuration.deviceId !== sensorData.deviceId) {
+    throw new Error('Invalid deviceId');
+  }
+  const { name, location, altitude, coordinates } = configuration;
+  const sensors = calculateSeaLevelSensor({ sensors: sensorData.sensors, altitude });
+  return Object.assign({}, mapSensorData(sensorData), { name, sensors, location, altitude, coordinates });
+};
+
+const enhanceSensorData = ({ sensorData }) =>
+  getSensorConfiguration({ deviceId: sensorData.deviceId })
     .then(({ name, location, altitude, coordinates }) => {
-      const seaLevelPressureSensors =
-        _.filter(data.sensors, { type: 'absolutepressure', unit: 'hPa' })
-          .map((sensor) =>
-            ({
-              type: 'seaLevelPressure',
-              value: pressureAtSeaLevel({ pressure: sensor.value, altitude }),
-              unit: sensor.unit,
-            }));
-      const sensors = [].concat(data.sensors, seaLevelPressureSensors);
-      return Object.assign({}, data, { name, location, altitude, sensors, coordinates });
+      const sensors = calculateSeaLevelSensor({ sensors: sensorData.sensors, altitude });
+      return Object.assign({}, sensorData, { name, location, altitude, sensors, coordinates });
     });
 
 module.exports = {
   devicesByDeviceId,
   mapSensorData,
   enhanceSensorData,
+  enhanceSensorDataWithConfiguration,
 };
