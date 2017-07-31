@@ -13,10 +13,12 @@ if (process.env.SERVERLESS_MOCHA_PLUGIN_LIVE) {
   wrapped = lambdaWrapper.wrap(mod);
 } else {
   const mod = require(process.env.SERVERLESS_TEST_ROOT + '/process/latest-locations/index.js');
-  wrapped = lambdaWrapper.wrap(mod, { 
-    handler: 'handler' 
+  wrapped = lambdaWrapper.wrap(mod, {
+    handler: 'handler',
   });
 }
+
+const s3putlatest = require('./payload/s3putlatest.json');
 
 describe('latest-locations', () => {
   before((done) => {
@@ -26,7 +28,7 @@ describe('latest-locations', () => {
   });
 
   it('implement tests here', () => {
-    return wrapped.run({}).then((response) => {
+    return wrapped.run(s3putlatest).then((response) => {
       expect(response).to.not.be.empty;
     });
   });

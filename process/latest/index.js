@@ -14,6 +14,10 @@ const s3 = new AWS.S3({
   region: AWS.config.region || process.env.SERVERLESS_REGION || 'us-east-1',
 });
 
+const lambda = new AWS.Lambda({
+  region: AWS.config.region || process.env.SERVERLESS_REGION || 'us-east-1',
+});
+
 module.exports.handler = (event, context, callback) => {
   log(event);
 
@@ -30,12 +34,20 @@ module.exports.handler = (event, context, callback) => {
   return enhanceSensorData({ deviceId: image.deviceId, sensorData: payload })
     .then((enhancedPayload) => {
       log('payload', enhancedPayload);
-      s3.putObject({
-        Bucket: process.env.DATA_BUCKET_NAME,
-        Key: `sensors/${enhancedPayload.deviceId}/latest`,
-        ContentType: 'application/json',
-        Body: JSON.stringify(enhancedPayload),
-      }).promise();
+      return Promise.all([
+        s3.putObject({
+          Bucket: process.env.DATA_BUCKET_NAME,
+          Key: `sensors/${enhancedPayload.deviceId}/latest`,
+          ContentType: 'application/json',
+          Body: JSON.stringify(enhancedPayload),
+        }).promise(),
+        lambda.invoke({
+          FunctionName:
+            `${process.env.SERVERLESS_PROJECT}-${process.env.SERVERLESS_STAGE}-latest-hours`,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ type: '1h', deviceId: image.deviceId }),
+        }).promise(),
+      ]);
     })
     .then(() =>
       callback(null, 'ok'))

@@ -53,7 +53,7 @@ const getSensorData = ({ from, to, deviceId }) => {
     .then(data => data.Items);
 };
 
-const getSensorConfiguration = ({ deviceId }) => {
+const getSensorConfiguration = ({ deviceId, location }) => {
   const params =
     Object.assign(
       { TableName: process.env.SENSORS_TABLE_NAME },
@@ -80,6 +80,15 @@ const getSensorConfiguration = ({ deviceId }) => {
     });
   }
 
+  if (location) {
+    Object.assign(params, {
+      FilterExpression: '#location = :location',
+      ExpressionAttributeValues: {
+        ':location': location,
+      },
+    });
+  }
+
   return dynamodb.scan(params).promise()
     .then(data => (deviceId ? data.Items[0] : data.Items));
 };
@@ -89,9 +98,13 @@ const getEnhancedSensorData = ({ from, to, deviceId }) =>
     .then(configurationItems =>
       getSensorData({ from, to, deviceId })
         .then(sensorData => sensorData.reduce((result, data) => {
-          const configurationItem = _.find(configurationItems, { deviceId: data.deviceId });
+          const configurationItem =
+            deviceId ? configurationItems : _.find(configurationItems, { deviceId: data.deviceId });
           if (configurationItem) {
-            const d = enhanceSensorDataWithConfiguration({ configuration: configurationItem, sensorData: data });
+            const d = enhanceSensorDataWithConfiguration({
+              configuration: configurationItem,
+              sensorData: data,
+            });
             log(d);
             result.push(d);
           }

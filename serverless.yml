@@ -38,6 +38,11 @@ provider:
       Action:
       - KMS:Decrypt
       Resource: ${self:custom.kmsSecrets.keyArn}
+    - Effect: Allow
+      Action:
+      - lambda:InvokeFunction
+      - lambda:InvokeAsync
+      Resource: arn:aws:lambda:${self:provider.environment.SERVERLESS_REGION}:*:*
 package:
   exclude:
     - test/**
@@ -203,7 +208,24 @@ resources:
               MinTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
               MaxTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
               DefaultTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
-              PathPattern: data/*
+              PathPattern: sensors/*
+            - TargetOriginId: DataBucket
+              AllowedMethods:
+                - HEAD
+                - GET
+                - OPTIONS
+              CachedMethods:
+                - HEAD
+                - GET
+              ForwardedValues:
+                QueryString: 'false'
+                Cookies:
+                  Forward: none
+              ViewerProtocolPolicy: redirect-to-https
+              MinTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              MaxTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              DefaultTTL: ${file(./.env.yml):${self:provider.environment.SERVERLESS_STAGE}.ttl}
+              PathPattern: locations/*
             - TargetOriginId: DataBucket
               AllowedMethods:
                 - HEAD

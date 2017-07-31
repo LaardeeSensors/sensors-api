@@ -24,7 +24,7 @@ module.exports.handler = (event, context, callback) => {
     .subtract(parseInt(event.type, 10), 'hours')
     .format('X'), 10);
 
-  return getEnhancedSensorData({ from, to })
+  return getEnhancedSensorData({ from, to, deviceId: event.deviceId })
     .then(devicesByDeviceId)
     .then(log)
     .then((devices) => {
